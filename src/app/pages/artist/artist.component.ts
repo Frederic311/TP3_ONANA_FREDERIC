@@ -1,193 +1,184 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+import { NgIf, NgFor } from '@angular/common';
 import { ArtistService } from '../../services/artist.service';
 import { ArtistDto } from '../../dto/artistDto';
-import { NgForm } from '@angular/forms';
-import { DatePipe, CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-artist',
-  templateUrl: './artist.component.html',
-  styleUrls: ['./artist.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule],
-  providers: [DatePipe]
+  templateUrl: './artist.component.html',
+  imports: [ReactiveFormsModule, NgIf, NgFor]
 })
 export class ArtistComponent implements OnInit {
   artists: ArtistDto[] = [];
-  pagedArtists: ArtistDto[] = [];
-  selectedArtist: ArtistDto = {
-    artistImage: '',
-    artistName: '',
-    stageName: '',
-    numberOfAlbums: 0,
-    socialMediaLinks: [],
-    recordLabel: '',
-    publishingHouse: '',
-    careerStartDate: '',
-    rating: 0,
-  };
-  validationErrors: { [key: string]: string } = {};
-  generalError: string = '';
-  isCreating = false;
-  alertMessage: string = '';
-  showAlert = false;
-  currentPage = 1;
-  itemsPerPage = 5;
-  totalItems = 0;
-  totalPages = 0;
-  pages: number[] = [];
+  artistForm: FormGroup;
+  selectedArtist: ArtistDto | null = null;
+  successMessage: string = '';
+  errorMessage: string = '';
+  currentPage: number = 1;
+  itemsPerPage: number = 5;
+  viewMode: boolean = false;
 
-  constructor(private artistService: ArtistService, private datepipe: DatePipe) { }
+  private fb = inject(FormBuilder);
+  private artistService = inject(ArtistService);
+
+  constructor() {
+    this.artistForm = this.fb.group({
+      artistName: ['', Validators.required],
+      stageName: [''],
+      numberOfAlbums: [0],
+      artistImage: [''],
+      careerStartDate: ['', Validators.required],
+      socialMediaLinks: [''],
+      recordLabel: [''],
+      publishingHouse: [''],
+      rating: [0]
+    });
+  }
 
   ngOnInit(): void {
     this.loadArtists();
   }
 
-  loadArtists() {
+  loadArtists(): void {
     this.artistService.getArtists().subscribe(
-      (artists) => {
-        this.artists = artists.map(artist => ({
-          ...artist,
-          careerStartDate: artist.careerStartDate ? new Date(artist.careerStartDate).toISOString().split('T')[0] : ''
-        }));
-        this.totalItems = this.artists.length;
-        this.calculateTotalPages();
-        this.paginateArtists();
+      (data: ArtistDto[]) => {
+        this.artists = data;
       },
       (error) => {
-        console.error('Error loading artists:', error);
-        this.showAlertMessage('Error loading artists', true);
+        this.displayErrorMessage(error.message || 'Error loading artists');
       }
     );
   }
 
-  calculateTotalPages() {
-    this.totalPages = Math.ceil(this.totalItems / this.itemsPerPage);
-    this.pages = [];
-    for (let i = 1; i <= this.totalPages; i++) {
-      this.pages.push(i);
-    }
+  openCreateArtistForm(): void {
+    this.artistForm.reset();
+    this.selectedArtist = null;
+    this.viewMode = false;
   }
 
-  paginateArtists() {
-    const startIndex = (this.currentPage - 1) * this.itemsPerPage;
-    const endIndex = Math.min(startIndex + this.itemsPerPage - 1, this.totalItems - 1);
-    this.pagedArtists = this.artists.slice(startIndex, endIndex + 1);
+  openEditArtistForm(artist: ArtistDto): void {
+    this.selectedArtist = artist;
+    this.artistForm.patchValue(artist);
+    this.viewMode = false;
   }
 
-  changePage(page: number) {
-    if (page >= 1 && page <= this.totalPages) {
-      this.currentPage = page;
-      this.paginateArtists();
-    }
+  viewArtist(artist: ArtistDto): void {
+    this.selectedArtist = artist;
+    this.artistForm.patchValue(artist);
+    this.viewMode = true;
   }
 
-  get previousPage() {
-    return Math.max(1, this.currentPage - 1);
+  closeCreateArtistForm(): void {
+    this.artistForm.reset();
+    this.selectedArtist = null;
+    this.viewMode = false;
   }
 
-  get nextPage() {
-    return Math.min(this.totalPages, this.currentPage + 1);
-  }
-
-  openCreateArtistForm() {
-    this.selectedArtist = {
-      artistImage: '',
-      artistName: '',
-      stageName: '',
-      numberOfAlbums: 0,
-      socialMediaLinks: [],
-      recordLabel: '',
-      publishingHouse: '',
-      careerStartDate: '',
-      rating: 0,
-    };
-    this.isCreating = true;
-    this.validationErrors = {};
-    this.generalError = '';
-  }
-
-  closeCreateArtistForm() {
-    this.isCreating = false;
-  }
-
-  createOrUpdateArtist(form: NgForm) {
-    if (form.invalid) {
-      return;
-    }
-    if (this.selectedArtist.rating === undefined) {
-      this.selectedArtist.rating = 0;
-  }
-
-    const formData = new FormData();
-    (Object.keys(this.selectedArtist) as (keyof ArtistDto)[]).forEach((key) => {
-      if (key === 'socialMediaLinks') {
-        formData.append(key, (this.selectedArtist[key] as string[]).join(','));
-      } else if (key === 'artistImage') {
-        const imageInput = document.getElementById('artistImage') as HTMLInputElement;
-        if (imageInput.files && imageInput.files.length > 0) {
-          formData.append(key, imageInput.files[0]);
-        }
-      } else if (key === 'careerStartDate') {
-        formData.append(key, this.datepipe.transform(this.selectedArtist[key], 'yyyy-MM-dd') || '');
-      } else {
-        formData.append(key, this.selectedArtist[key] as string);
-      }
-    });
-
-    const request = this.selectedArtist.id
-      ? this.artistService.updateArtist(this.selectedArtist.id, formData)
-      : this.artistService.createArtist(formData);
-
-    request.subscribe(
-      (response) => {
-        this.loadArtists();
-        this.showAlertMessage(this.selectedArtist.id ? 'Artist updated successfully!' : 'Artist created successfully!', false);
-        this.closeCreateArtistForm();
-        form.resetForm();
-      },
-      (error) => {
-        console.error('Error creating/updating artist:', error);
-        this.generalError = error.error.message || 'Failed to create/update artist.';
-        this.showAlertMessage(this.generalError, true);
-      }
-    );
-  }
-
-  editArtist(artist: ArtistDto) {
-    this.selectedArtist = {
-      ...artist,
-      careerStartDate: artist.careerStartDate ? this.datepipe.transform(artist.careerStartDate, 'yyyy-MM-dd') || '' : '',
-    };
-    this.isCreating = true;
-  }
-
-  viewArtist(artist: ArtistDto) {
-    this.selectedArtist = { ...artist };
-  }
-
-  deleteArtist(id: string) {
-    const confirmDelete = confirm('Are you sure you want to delete this artist?');
-    if (confirmDelete) {
+  onDelete(id: string): void {
+    const confirmed = window.confirm('Are you sure you want to delete this artist?');
+    if (confirmed) {
       this.artistService.deleteArtist(id).subscribe(
-        () => {
+        (response) => {
           this.loadArtists();
-          this.showAlertMessage('Artist deleted successfully!', false);
+          this.displaySuccessMessage(response || 'Artist deleted successfully');
         },
         (error) => {
-          console.error('Error deleting artist:', error);
-          this.showAlertMessage('Failed to delete artist.', true);
+          this.displayErrorMessage(this.extractErrorMessage(error) || 'Error deleting artist');
         }
       );
     }
   }
 
-  showAlertMessage(message: string, isError: boolean) {
-    this.alertMessage = message;
-    this.showAlert = true;
+  onSubmit(): void {
+    if (this.artistForm.invalid) {
+      return;
+    }
+
+    const formData: FormData = new FormData();
+    Object.keys(this.artistForm.value).forEach(key => {
+      const value = this.artistForm.get(key)?.value;
+      if (key === 'artistImage') {
+        const imageInput = document.getElementById('artistImage') as HTMLInputElement;
+        if (imageInput && imageInput.files && imageInput.files.length > 0) {
+          formData.append(key, imageInput.files[0]);
+        }
+      } else if (value !== undefined && value !== null) {
+        formData.append(key, value);
+      }
+    });
+
+    console.log('Form data:', formData);
+
+    if (this.selectedArtist && this.selectedArtist.id) {
+      console.log('Updating artist with ID:', this.selectedArtist.id);
+      this.artistService.updateArtist(this.selectedArtist.id, formData).subscribe(
+        (response) => {
+          console.log('Update response:', response);
+          this.loadArtists();
+          this.displaySuccessMessage(response || 'Artist updated successfully');
+        },
+        (error) => {
+          console.log('Update error:', error);
+          this.displayErrorMessage(this.extractErrorMessage(error) || 'Error updating artist');
+        }
+      );
+    } else {
+      console.log('Creating new artist');
+      this.artistService.createArtist(formData).subscribe(
+        (response) => {
+          console.log('Create response:', response);
+          this.loadArtists();
+          this.displaySuccessMessage(response || 'Artist created successfully');
+        },
+        (error) => {
+          console.log('Create error:', error);
+          this.displayErrorMessage(this.extractErrorMessage(error) || 'Error creating artist');
+        }
+      );
+    }
+
+    this.artistForm.reset();
+    this.selectedArtist = null;
+    this.viewMode = false;
+  }
+
+  displaySuccessMessage(message: string): void {
+    this.successMessage = message;
     setTimeout(() => {
-      this.showAlert = false;
+      this.successMessage = '';
     }, 2000);
+  }
+
+  displayErrorMessage(message: string): void {
+    this.errorMessage = message;
+    setTimeout(() => {
+      this.errorMessage = '';
+    }, 2000);
+  }
+
+  extractErrorMessage(error: any): string {
+    if (error.error && typeof error.error === 'object') {
+      return Object.values(error.error).join(', ');
+    }
+    return error.message || 'An unknown error occurred';
+  }
+
+  get paginatedArtists(): ArtistDto[] {
+    const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+    return this.artists.slice(startIndex, startIndex + this.itemsPerPage);
+  }
+
+  onPageChange(page: number): void {
+    this.currentPage = page;
+  }
+
+  get totalPages(): number {
+    return Math.ceil(this.artists.length / this.itemsPerPage);
+  }
+
+  get pagesArray(): any[] {
+    return new Array(this.totalPages);
   }
 }
