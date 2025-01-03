@@ -60,15 +60,19 @@ export class ArtistComponent implements OnInit {
 
   openEditArtistForm(artist: ArtistDto): void {
     this.selectedArtist = artist;
-    this.artistForm.patchValue(artist);
-    this.viewMode = false;
+    this.artistForm.patchValue({
+      artistName: artist.artistName,
+      stageName: artist.stageName,
+      numberOfAlbums: artist.numberOfAlbums,
+      careerStartDate: artist.careerStartDate,
+      socialMediaLinks: artist.socialMediaLinks?.join(', '),
+      recordLabel: artist.recordLabel,
+      publishingHouse: artist.publishingHouse,
+      rating: artist.rating
+    });
   }
 
-  viewArtist(artist: ArtistDto): void {
-    this.selectedArtist = artist;
-    this.artistForm.patchValue(artist);
-    this.viewMode = true;
-  }
+
 
   closeCreateArtistForm(): void {
     this.artistForm.reset();
