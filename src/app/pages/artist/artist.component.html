@@ -1,8 +1,7 @@
 <div class="container mt-5">
   <h2 class="text-center mb-4">Artists Management</h2>
 
-  <div *ngIf="successMessage" class="alert alert-success">{{ successMessage }}</div>
-  <div *ngIf="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
+
 
 
   <table class="table table-bordered sm table-hover mt-5">
@@ -58,6 +57,9 @@
       </li>
     </ul>
   </nav>
+
+  <div *ngIf="successMessage" class="alert alert-success">{{ successMessage }}</div>
+  <div *ngIf="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
 
   <div class="form-container">
     <form [formGroup]="artistForm" (ngSubmit)="onSubmit()">
